@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Wake Up Clock ⏰</title>
+
+<style>
+  :root {
+    --sky: #1a1a2e;
+    --sky-day: #87CEEB;
+    --moon: #f5e642;
+    --sun: #FFD700;
+    --cloud: #fff;
+    --star: #fffde7;
+    --ring-bg: rgba(255,255,255,0.1);
+    --ring-fill: #ff9f43;
+    --ring-glow: #ffbe76;
+    --green: #6dba7a;
+    --text: #fff;
+    --subtext: rgba(255,255,255,0.7);
+    --card: rgba(255,255,255,0.08);
+    --border: rgba(255,255,255,0.15);
+    --btn: #ff9f43;
+    --btn-hover: #ffbe76;
+    --radius: 24px;
+    --transition: 0.4s cubic-bezier(0.34,1.56,0.64,1);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: ui-rounded, 'SF Pro Rounded', 'Varela Round', system-ui, sans-serif;
+    background: var(--sky);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    transition: background 1s ease;
+  }
+
+  /* Stars */
+  .stars {
+    position: fixed; inset: 0; pointer-events: none; z-index: 0;
+    transition: opacity 1s ease;
+  }
+  .star {
+    position: absolute;
+    background: white;
+    border-radius: 50%;
+    animation: twinkle 2s infinite alternate;
+  }
+  @keyframes twinkle {
+    from { opacity: 0.3; transform: scale(1); }
+    to   { opacity: 1;   transform: scale(1.4); }
+  }
+
+  /* Clouds */
+  .clouds { position: fixed; inset: 0; pointer-events: none; z-index: 0; opacity: 0; transition: opacity 1s ease; }
+  .cloud {
+    position: absolute;
+    background: white;
+    border-radius: 50px;
+    opacity: 0.7;
+    animation: drift linear infinite;
+  }
+  .cloud::before, .cloud::after {
+    content: '';
+    position: absolute;
+    background: white;
+    border-radius: 50%;
+  }
+  @keyframes drift {
+    from { transform: translateX(-200px); }
+    to   { transform: translateX(110vw); }
+  }
+
+  .app {
+    position: relative; z-index: 1;
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px 20px;
+    width: 100vw;
+    min-height: 100vh;
+  }
+
+  /* When countdown is active, shrink everything else */
+  .app.counting .header { display: none; }
+  .app.counting .current-time { font-size: 2.6rem; letter-spacing: -1px; }
+  .app.counting .alarm-card {
+    padding: 8px 14px;
+    border-radius: 14px;
+    width: auto;
+  }
+  .app.counting .alarm-label { display: none; }
+  .app.counting .alarm-set-row { gap: 6px; }
+  .app.counting .time-input {
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 5px 8px;
+    border-radius: 8px;
+    width: auto;
+    min-width: 0;
+  }
+  .app.counting .set-btn {
+    font-size: 0.75rem;
+    padding: 5px 10px;
+    border-radius: 8px;
+  }
+  .app.counting .status-badge {
+    font-size: 0.7rem;
+    padding: 3px 10px;
+    margin-top: 5px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+  }
+  .header h1 {
+    font-size: 2rem; font-weight: 900;
+    color: var(--text);
+    text-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    letter-spacing: -0.5px;
+  }
+  .header .emoji { font-size: 2.4rem; display: block; margin-bottom: 4px; animation: bounce 2s ease-in-out infinite; }
+  @keyframes bounce {
+    0%,100% { transform: translateY(0); }
+    50%      { transform: translateY(-6px); }
+  }
+
+  /* Time display */
+  .current-time {
+    font-size: 5rem; font-weight: 900;
+    color: var(--text);
+    letter-spacing: -2px;
+    text-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    line-height: 1;
+  }
+  .current-ampm {
+    font-size: 1.4rem; font-weight: 700;
+    color: var(--subtext);
+    margin-left: 6px;
+    vertical-align: super;
+  }
+
+  /* Alarm card */
+  .alarm-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 24px;
+    width: 100%;
+    backdrop-filter: blur(10px);
+  }
+
+  .alarm-label {
+    font-size: 0.85rem; font-weight: 700;
+    color: var(--subtext);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+  }
+
+  .alarm-set-row {
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  .time-input {
+    flex: 1;
+    background: rgba(255,255,255,0.1);
+    border: 1.5px solid var(--border);
+    border-radius: 14px;
+    color: white;
+    font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+    font-size: 1.6rem;
+    font-weight: 800;
+    padding: 10px 14px;
+    outline: none;
+    width: 100%;
+    transition: border-color 0.2s;
+    color-scheme: dark;
+  }
+  .time-input:focus { border-color: var(--btn); }
+
+  .set-btn {
+    background: var(--btn);
+    color: white;
+    border: none;
+    border-radius: 14px;
+    font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+    font-size: 1rem;
+    font-weight: 800;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    white-space: nowrap;
+  }
+  .set-btn:hover { background: var(--btn-hover); }
+  .set-btn:active { transform: scale(0.96); }
+  .set-btn.cancel { background: rgba(255,255,255,0.15); }
+  .set-btn.cancel:hover { background: rgba(255,255,255,0.25); }
+
+  /* Status badge */
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(109,186,122,0.2);
+    border: 1px solid rgba(109,186,122,0.4);
+    border-radius: 50px;
+    padding: 6px 14px;
+    font-size: 0.9rem; font-weight: 700;
+    color: #a8e6b3;
+    margin-top: 12px;
+    transition: all 0.3s;
+  }
+  .status-badge.waiting { background: rgba(255,159,67,0.15); border-color: rgba(255,159,67,0.3); color: #ffd19e; }
+  .status-badge .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #6dba7a;
+    animation: pulse-dot 1.5s ease-in-out infinite;
+  }
+  .status-badge.waiting .dot { background: var(--btn); }
+  @keyframes pulse-dot {
+    0%,100% { transform: scale(1); opacity: 1; }
+    50%      { transform: scale(1.5); opacity: 0.6; }
+  }
+
+  /* Countdown timer */
+  .countdown-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 8px;
+    animation: fadeInUp 0.5s ease forwards;
+    width: 100%;
+  }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .countdown-label {
+    font-size: 0.8rem; font-weight: 800;
+    color: var(--subtext);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  .pie-wrap {
+    position: relative;
+    width: min(82vw, 82vh);
+    height: min(82vw, 82vh);
+  }
+
+  .pie-svg {
+    width: 100%; height: 100%;
+    transform: rotate(-90deg);
+  }
+
+  .pie-track {
+    fill: none;
+    stroke: rgba(255,255,255,0.1);
+    stroke-width: 22;
+  }
+
+  .pie-fill {
+    fill: none;
+    stroke: #ff3b30;
+    stroke-width: 22;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear, stroke 2s ease, filter 2s ease;
+  }
+
+  .pie-center {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px;
+  }
+
+  .pie-emoji { font-size: min(10vw, 10vh); animation: spin-slow 8s linear infinite; }
+  @keyframes spin-slow {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  .pie-countdown-text {
+    font-size: min(13vw, 13vh); font-weight: 900;
+    color: white;
+    letter-spacing: -1px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    line-height: 1;
+  }
+  .pie-countdown-sub {
+    font-size: min(3vw, 3vh); font-weight: 700;
+    color: var(--subtext);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+  }
+
+  /* Color segments outside the countdown */
+  .pie-fill.soon {
+    stroke: #ff6b6b;
+    filter: drop-shadow(0 0 8px rgba(255,107,107,0.8));
+  }
+
+  /* Alarm ringing */
+  .ringing-screen {
+    display: none;
+    position: fixed; inset: 0; z-index: 100;
+    background: #22c55e;
+    flex-direction: column; align-items: center; justify-content: center;
+    gap: 20px;
+    animation: green-pulse 0.8s ease-in-out infinite alternate;
+  }
+  .ringing-screen.active { display: flex; }
+  @keyframes green-pulse {
+    from { background: #22c55e; box-shadow: inset 0 0 80px rgba(0,0,0,0.1); }
+    to   { background: #4ade80; box-shadow: inset 0 0 120px rgba(255,255,255,0.2); }
+  }
+  .ring-emoji { font-size: 7rem; animation: ring-bounce 0.6s ease-in-out infinite alternate; }
+  @keyframes ring-bounce {
+    from { transform: scale(1) rotate(-5deg); }
+    to   { transform: scale(1.15) rotate(5deg); }
+  }
+  .ring-title {
+    font-size: 3rem; font-weight: 900;
+    color: white; text-align: center;
+    text-shadow: 0 4px 20px rgba(0,0,0,0.2);
+  }
+  .ring-sub {
+    font-size: 1.3rem; font-weight: 700;
+    color: rgba(255,255,255,0.85);
+  }
+  .dismiss-btn {
+    margin-top: 10px;
+    background: white;
+    color: #16a34a;
+    border: none;
+    border-radius: 50px;
+    font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+    font-size: 1.4rem; font-weight: 900;
+    padding: 16px 48px;
+    cursor: pointer;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.15);
+    transition: transform 0.1s;
+  }
+  .dismiss-btn:active { transform: scale(0.95); }
+
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<!-- Stars (night bg) -->
+<div class="stars" id="stars"></div>
+<!-- Clouds (day bg) -->
+<div class="clouds" id="clouds"></div>
+
+<div class="app">
+  <div class="header">
+    <span class="emoji" id="skyEmoji">🌙</span>
+    <h1>Wake Up Clock</h1>
+  </div>
+
+  <div class="current-time" id="currentTime">
+    <span id="timeHH">12</span>:<span id="timeMM">00</span><span class="current-ampm" id="timeAMPM">AM</span>
+  </div>
+
+  <div class="alarm-card">
+    <div class="alarm-label">Alarm Time</div>
+    <div class="alarm-set-row">
+      <input type="time" class="time-input" id="alarmInput" value="07:00">
+      <button class="set-btn" id="setBtn" onclick="setAlarm()">Set ✓</button>
+      <button class="set-btn cancel hidden" id="cancelBtn" onclick="cancelAlarm()">✕</button>
+    </div>
+    <div class="status-badge hidden" id="statusBadge">
+      <span class="dot"></span>
+      <span id="statusText">Alarm set!</span>
+    </div>
+  </div>
+
+  <!-- Countdown pie (only shows in last hour) -->
+  <div class="countdown-wrap hidden" id="countdownWrap">
+    <div class="countdown-label">⏳ Time until wake-up</div>
+    <div class="pie-wrap">
+      <svg id="pieSvg" class="pie-svg" viewBox="0 0 200 200">
+        <circle class="pie-track" cx="100" cy="100" r="80"/>
+        <circle class="pie-fill" id="pieFill" cx="100" cy="100" r="80"/>
+      </svg>
+      <div class="pie-center">
+        <div class="pie-emoji" id="pieEmoji">😴</div>
+        <div class="pie-countdown-text" id="pieTime">60:00</div>
+        <div class="pie-countdown-sub">minutes left</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Ringing overlay -->
+<div class="ringing-screen" id="ringingScreen">
+  <div class="ring-emoji">⏰</div>
+  <div class="ring-title">Good Morning!<br>Time to Wake Up! ☀️</div>
+  <div class="ring-sub">Rise and shine, sleepyhead!</div>
+  <button class="dismiss-btn" onclick="dismissAlarm()">I'm Awake! 🙌</button>
+</div>
+
+<script>
+  // ─── Stars ─────────────────────────────────────────────
+  const starsEl = document.getElementById('stars');
+  for (let i = 0; i < 80; i++) {
+    const s = document.createElement('div');
+    s.className = 'star';
+    const sz = Math.random() * 3 + 1;
+    s.style.cssText = `width:${sz}px;height:${sz}px;top:${Math.random()*100}%;left:${Math.random()*100}%;animation-delay:${Math.random()*3}s;animation-duration:${1.5+Math.random()*2}s`;
+    starsEl.appendChild(s);
+  }
+
+  // ─── Clouds ─────────────────────────────────────────────
+  const cloudsEl = document.getElementById('clouds');
+  for (let i = 0; i < 5; i++) {
+    const c = document.createElement('div');
+    c.className = 'cloud';
+    const w = 80 + Math.random() * 120, h = w * 0.5;
+    const top = 5 + Math.random() * 40;
+    const dur = 30 + Math.random() * 40;
+    const delay = -Math.random() * dur;
+    c.style.cssText = `width:${w}px;height:${h}px;top:${top}%;animation-duration:${dur}s;animation-delay:${delay}s;opacity:${0.4+Math.random()*0.4}`;
+    c.innerHTML = `<style>.cloud:nth-child(${i+1})::before{width:${w*0.5}px;height:${h*1.3}px;top:-${h*0.4}px;left:${w*0.15}px}.cloud:nth-child(${i+1})::after{width:${w*0.4}px;height:${h*1.1}px;top:-${h*0.25}px;left:${w*0.45}px}</style>`;
+    cloudsEl.appendChild(c);
+  }
+
+  // ─── State ──────────────────────────────────────────────
+  let alarmTime = null;
+  let ringing = false;
+  let clockSeedMs = null;   // real-world ms at seed moment
+  let seedPerfMs = null;    // performance.now() at seed moment
+
+  // ─── Helpers ────────────────────────────────────────────
+  function lerp(a, b, t) { return a + (b - a) * Math.max(0, Math.min(1, t)); }
+
+  function nowMs() {
+    if (clockSeedMs !== null) {
+      return clockSeedMs + (performance.now() - seedPerfMs);
+    }
+    return Date.now();
+  }
+
+  // ─── Pie setup ──────────────────────────────────────────
+  const R = 80;
+  const CIRCUMFERENCE = 2 * Math.PI * R;
+  const pieFill = document.getElementById('pieFill');
+  pieFill.style.strokeDasharray = CIRCUMFERENCE;
+  pieFill.style.strokeDashoffset = 0;
+
+  // ─── Fetch real time from Anthropic API ─────────────────
+  async function seedClock() {
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 60,
+          messages: [{
+            role: 'user',
+            content: 'Reply with ONLY a JSON object, no markdown: {"iso":"<current ISO 8601 datetime with timezone offset>"}'
+          }]
+        })
+      });
+      const perfNow = performance.now();
+      const data = await res.json();
+      const text = data.content.find(b => b.type === 'text').text.trim();
+      const clean = text.replace(/```json|```/g, '').trim();
+      const parsed = JSON.parse(clean);
+      clockSeedMs = new Date(parsed.iso).getTime();
+      seedPerfMs = perfNow;
+    } catch(e) {
+      // fallback: use Date.now() as-is
+      clockSeedMs = Date.now();
+      seedPerfMs = performance.now();
+    }
+    tick();
+    setInterval(tick, 1000);
+  }
+
+  // ─── Clock tick ─────────────────────────────────────────
+  function tick() {
+    const now = new Date(nowMs());
+    const h = now.getHours(), m = now.getMinutes(), s = now.getSeconds();
+
+    const disp12 = h % 12 || 12;
+    const ampm = h < 12 ? 'AM' : 'PM';
+    document.getElementById('timeHH').textContent = String(disp12).padStart(2,'0');
+    document.getElementById('timeMM').textContent = String(m).padStart(2,'0');
+    document.getElementById('timeAMPM').textContent = ampm;
+
+    const isDay = h >= 6 && h < 20;
+    document.body.style.background = isDay
+      ? 'linear-gradient(180deg, #4a90d9 0%, #87CEEB 100%)'
+      : 'linear-gradient(180deg, #0d0d1a 0%, #1a1a2e 100%)';
+    starsEl.style.opacity = isDay ? '0' : '1';
+    cloudsEl.style.opacity = isDay ? '1' : '0';
+    document.getElementById('skyEmoji').textContent = isDay ? '☀️' : '🌙';
+
+    if (alarmTime && !ringing) {
+      const nowTotalSec = h * 3600 + m * 60 + s;
+      const alarmTotalSec = alarmTime.h * 3600 + alarmTime.m * 60;
+      let diffSec = alarmTotalSec - nowTotalSec;
+      if (diffSec < 0) diffSec += 86400;
+
+      if (diffSec <= 1) { triggerAlarm(); return; }
+
+      const dh = Math.floor(diffSec / 3600);
+      const dm = Math.floor((diffSec % 3600) / 60);
+      const ds = diffSec % 60;
+      document.getElementById('statusText').textContent =
+        dh > 0 ? `Waking up in ${dh}h ${dm}m` : `Waking up in ${dm}m ${ds}s`;
+
+      const countdownWrap = document.getElementById('countdownWrap');
+      if (diffSec <= 3600) {
+        countdownWrap.classList.remove('hidden');
+        document.querySelector('.app').classList.add('counting');
+        const progress = diffSec / 3600;
+        pieFill.style.strokeDashoffset = CIRCUMFERENCE * (1 - progress);
+
+        let r, g, b;
+        if (diffSec > 1800) {
+          const t = (3600 - diffSec) / 1800;
+          r = 255; g = Math.round(lerp(59, 140, t)); b = Math.round(lerp(48, 0, t));
+        } else if (diffSec > 900) {
+          const t = (1800 - diffSec) / 900;
+          r = 255; g = Math.round(lerp(140, 191, t)); b = 0;
+        } else {
+          const t = (900 - diffSec) / 900;
+          r = 255; g = Math.round(lerp(191, 230, t)); b = 0;
+        }
+
+        pieFill.style.stroke = `rgb(${r},${g},${b})`;
+        const glowSize = 12 + (diffSec < 900 ? 16 * (1 - diffSec / 900) : 0);
+        const glowAlpha = diffSec < 900 ? 0.5 + 0.4 * (1 - diffSec / 900) : 0.4;
+        document.getElementById('pieSvg').style.filter =
+          `drop-shadow(0 0 ${glowSize}px rgba(${r},${g},${b},${glowAlpha}))`;
+
+        document.getElementById('pieEmoji').textContent =
+          diffSec <= 300 ? '😮' : diffSec <= 900 ? '😯' : diffSec <= 1800 ? '🙂' : '😴';
+
+        const minLeft = Math.floor(diffSec / 60);
+        const secLeft = diffSec % 60;
+        document.getElementById('pieTime').textContent =
+          `${String(minLeft).padStart(2,'0')}:${String(secLeft).padStart(2,'0')}`;
+      } else {
+        countdownWrap.classList.add('hidden');
+        document.querySelector('.app').classList.remove('counting');
+      }
+    }
+  }
+
+  // ─── Set / Cancel alarm ─────────────────────────────────
+  function setAlarm() {
+    const val = document.getElementById('alarmInput').value;
+    if (!val) return;
+    const [h, m] = val.split(':').map(Number);
+    alarmTime = { h, m };
+    document.getElementById('setBtn').classList.add('hidden');
+    document.getElementById('cancelBtn').classList.remove('hidden');
+    document.getElementById('alarmInput').disabled = true;
+    const badge = document.getElementById('statusBadge');
+    badge.classList.remove('hidden');
+    badge.classList.add('waiting');
+    document.querySelector('.status-badge .dot').style.background = 'var(--btn)';
+    document.getElementById('statusText').textContent = 'Alarm set!';
+  }
+
+  function cancelAlarm() {
+    alarmTime = null;
+    document.getElementById('setBtn').classList.remove('hidden');
+    document.getElementById('cancelBtn').classList.add('hidden');
+    document.getElementById('alarmInput').disabled = false;
+    document.getElementById('statusBadge').classList.add('hidden');
+    document.getElementById('countdownWrap').classList.add('hidden');
+    document.querySelector('.app').classList.remove('counting');
+  }
+
+  // ─── Alarm ringing ──────────────────────────────────────
+  function triggerAlarm() {
+    ringing = true;
+    document.getElementById('ringingScreen').classList.add('active');
+  }
+
+  function dismissAlarm() {
+    ringing = false;
+    document.getElementById('ringingScreen').classList.remove('active');
+    cancelAlarm();
+  }
+
+  // ─── Init ────────────────────────────────────────────────
+  seedClock();
+</script>
+</body>
+</html>
